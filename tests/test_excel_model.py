@@ -1,7 +1,8 @@
 import pandas as pd
 import pytest
 
-from models.excel_model import compute_accrual
+from models.excel_model import compute_accrual, wholesaler_breakdown
+from utils.mappings import WHOLESALER_GROUPS
 
 
 def _golden(golden_xlsx, sheet):
@@ -39,3 +40,27 @@ def test_compute_accrual_parity_overlap(gross_xlsx, cb_xlsx, golden_xlsx):
     for _, r in merged.iterrows():
         if r["Accrual"] and r["accrual_pred"] == r["accrual_pred"]:
             assert abs(r["accrual_pred"] - r["Accrual"]) / max(r["Accrual"], 1) < 0.05
+
+
+def test_wholesaler_breakdown_shape_and_shares(cb_xlsx):
+    vol, cpu = wholesaler_breakdown(pd.read_excel(cb_xlsx), "SEVOFLURANE")
+    if vol.empty:
+        pytest.skip("no SEVOFLURANE CB rows in sample")
+    # both tables have a Month col + the five wholesaler groups
+    for grp in WHOLESALER_GROUPS:
+        assert grp in vol.columns and grp in cpu.columns
+    assert "Total" in vol.columns and "Grand Total" in cpu.columns
+    # volume shares across the five groups sum to ~1.0 each month
+    for _, row in vol.iterrows():
+        s = sum(row[g] for g in WHOLESALER_GROUPS if pd.notna(row[g]))
+        assert abs(s - 1.0) < 1e-6
+
+
+def test_top_n_contracts_reduces_or_equals_cb(cb_xlsx, gross_xlsx):
+    gross, cb = pd.read_excel(gross_xlsx), pd.read_excel(cb_xlsx)
+    full = compute_accrual(gross, cb, "SEVOFLURANE")
+    top = compute_accrual(gross, cb, "SEVOFLURANE", top_n=15)
+    if full.empty or top.empty:
+        pytest.skip("no SEVOFLURANE rows in sample")
+    # restricting to top-15 contracts can only keep or lower total actual CB
+    assert top["actual_cb_amt"].sum() <= full["actual_cb_amt"].sum() + 1.0

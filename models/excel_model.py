@@ -12,7 +12,7 @@ excel_model_output.xlsx exactly.
 import numpy as np
 import pandas as pd
 
-from utils.mappings import classify_wholesaler, ndc_to_product
+from utils.mappings import WHOLESALER_GROUPS, classify_wholesaler, ndc_to_product
 
 
 def _filter_product(df, date_col, product_group):
@@ -23,14 +23,59 @@ def _filter_product(df, date_col, product_group):
     return d.dropna(subset=["year_month"])
 
 
-def compute_accrual(gross_df, cb_df, product_group, adj_factor=None):
+def _prep_cb(cb_df, product_group, top_n=None):
+    """Product CB rows tagged with wholesaler group, optionally restricted to
+    the top-N contracts by total chargeback volume (matches the Excel filter)."""
+    c = _filter_product(cb_df, "Process Date", product_group)
+    c["wh"] = c["Wholesaler Name"].map(classify_wholesaler)
+    if top_n and "Contract Number" in c.columns and not c.empty:
+        rank = c.groupby("Contract Number")["Chargeback Quantity"].sum().sort_values(
+            ascending=False)
+        keep = set(rank.head(int(top_n)).index)
+        c = c[c["Contract Number"].isin(keep)].copy()
+    return c
+
+
+def wholesaler_breakdown(cb_df, product_group, top_n=None):
+    """Return (volume_share_df, cb_per_unit_df) per month per wholesaler group.
+
+    volume_share: each group's share of monthly CB qty (fractions, + Total=1.0).
+    cb_per_unit: each group's CB amount / CB qty in $ (+ Grand Total = weighted).
+    """
+    c = _prep_cb(cb_df, product_group, top_n)
+    if c.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    grp = (
+        c.groupby(["year_month", "wh"])
+        .agg(q=("Chargeback Quantity", "sum"), a=("Chargeback Amount", "sum"))
+        .reset_index()
+    )
+    vol_rows, cpu_rows = [], []
+    for m in sorted(c["year_month"].unique()):
+        sub = grp[grp["year_month"] == m]
+        qmap = dict(zip(sub["wh"], sub["q"]))
+        amap = dict(zip(sub["wh"], sub["a"]))
+        tot_q, tot_a = sum(qmap.values()), sum(amap.values())
+        vrow, crow = {"Month": m}, {"Month": m}
+        for g in WHOLESALER_GROUPS:
+            q, a = float(qmap.get(g, 0.0)), float(amap.get(g, 0.0))
+            vrow[g] = (q / tot_q) if tot_q else np.nan
+            crow[g] = (a / q) if q else np.nan
+        vrow["Total"] = 1.0 if tot_q else np.nan
+        crow["Grand Total"] = (tot_a / tot_q) if tot_q else np.nan
+        vol_rows.append(vrow)
+        cpu_rows.append(crow)
+    return pd.DataFrame(vol_rows), pd.DataFrame(cpu_rows)
+
+
+def compute_accrual(gross_df, cb_df, product_group, adj_factor=None, top_n=None):
     """Return the per-month accrual frame for one product group.
 
     adj_factor: optional dict {year_month: float} for the (1 + adj) term.
+    top_n: optional, restrict CB to the top-N contracts by volume.
     """
     g = _filter_product(gross_df, "Shipped Date", product_group)
-    c = _filter_product(cb_df, "Process Date", product_group)
-    c["wh"] = c["Wholesaler Name"].map(classify_wholesaler)
+    c = _prep_cb(cb_df, product_group, top_n)
 
     sales = g.groupby("year_month")["Shipped Quantity"].sum()
     cbq = c.groupby("year_month")["Chargeback Quantity"].sum()

@@ -6,9 +6,10 @@ from dash import dcc, html
 from components.charts import accuracy_bar_line, error_histogram
 from components.kpi_cards import kpi_row
 from components.tables import data_table
-from models.excel_model import compute_accrual
+from models.excel_model import compute_accrual, wholesaler_breakdown
 from models.ml_model import process_v7_results
 from utils.format import fmt_dollar, fmt_pct, kpi_color, status_band
+from utils.mappings import WHOLESALER_GROUPS
 
 
 def empty_state(msg):
@@ -51,10 +52,17 @@ def default_cutoff(months, lag=2):
     return str(pd.Period(max(months), freq="M") - lag)
 
 
-def excel_body(gross, cb, product, start, end, complete_through=None):
+def _two_col(*cards):
+    return html.Div(className="two-col",
+                    style={"display": "flex", "gap": "16px", "flexWrap": "wrap"},
+                    children=[html.Div(c, style={"flex": "1 1 360px", "minWidth": "0"})
+                              for c in cards])
+
+
+def excel_body(gross, cb, product, start, end, complete_through=None, top_n=None):
     if gross.empty or cb.empty:
         return empty_state("Upload Gross Sales + CB Detail files to see results.")
-    res = compute_accrual(gross, cb, product)
+    res = compute_accrual(gross, cb, product, top_n=top_n)
     if res.empty:
         return empty_state(f"No data for {product}.")
     res = _between(res, "year_month", start, end)
@@ -118,8 +126,43 @@ def excel_body(gross, cb, product, start, end, complete_through=None):
         mature.assign(err=mature["ytd_gap_pct"]),
         "accrual_pred", "actual_cb_amt", "err"))
 
+    # ---- Section 1 (PRD 7.4): Primary Sales vs Chargeback summary ----
+    summary = pd.DataFrame({
+        "Month": res["year_month"],
+        "Sales Qty": res["sales_qty"].map(lambda v: f"{v:,.0f}"),
+        "CB Qty": res["actual_cb_qty"].map(lambda v: f"{v:,.0f}"),
+        "CB Amount ($)": res["actual_cb_amt"].map(fmt_dollar),
+        "Secondary/Primary Vol %": res["actual_cb_pct"].map(fmt_pct),
+    })
+    tot_sales, tot_cbq = res["sales_qty"].sum(), res["actual_cb_qty"].sum()
+    summary = pd.concat([summary, pd.DataFrame([{
+        "Month": "Grand Total",
+        "Sales Qty": f"{tot_sales:,.0f}",
+        "CB Qty": f"{tot_cbq:,.0f}",
+        "CB Amount ($)": fmt_dollar(res["actual_cb_amt"].sum()),
+        "Secondary/Primary Vol %": fmt_pct(tot_cbq / tot_sales if tot_sales else np.nan),
+    }])], ignore_index=True)
+
+    # ---- Section 2 (PRD 7.5): Wholesaler breakdown (two tables) ----
+    vol, cpu = wholesaler_breakdown(cb, product, top_n=top_n)
+    vol_cols = WHOLESALER_GROUPS + ["Total"]
+    cpu_cols = WHOLESALER_GROUPS + ["Grand Total"]
+    if not vol.empty:
+        for c in vol_cols:
+            vol[c] = vol[c].map(fmt_pct)
+        for c in cpu_cols:
+            cpu[c] = cpu[c].map(fmt_dollar)
+        wh_section = _two_col(
+            _card("Volume Share by Wholesaler", data_table(vol, "excel-volshare")),
+            _card("CB Per Unit by Wholesaler", data_table(cpu, "excel-cpu")),
+        )
+    else:
+        wh_section = html.Div()
+
     return html.Div([
         kpis,
+        _card("Primary Sales vs Chargeback Summary", data_table(summary, "excel-summary")),
+        wh_section,
         _card("Accrual Calculation",
               data_table(disp, "excel-accrual", extra_conditional=grey_partial),
               note=note),

@@ -112,6 +112,13 @@ def render_tab(tab, _refresh):
                         value=cutoff_default, clearable=False,
                         className="filter-dropdown"),
                 ]),
+                html.Div(className="filter-group", children=[
+                    html.Label("Contracts", className="filter-label"),
+                    dcc.Checklist(
+                        id="excel-topn",
+                        options=[{"label": " Top 15 by CB volume", "value": "top15"}],
+                        value=[], className="filter-check"),
+                ]),
             ]),
             html.Div(id="excel-body"),
         ])
@@ -144,12 +151,14 @@ def compute_months(df, col):
     Input("excel-start", "value"),
     Input("excel-end", "value"),
     Input("excel-cutoff", "value"),
+    Input("excel-topn", "value"),
 )
-def update_excel(product, start, end, cutoff):
+def update_excel(product, start, end, cutoff, topn):
     if not product:
         return render.empty_state("Upload Gross Sales + CB Detail files to see results.")
+    top_n = 15 if topn and "top15" in topn else None
     return render.excel_body(store.load_gross(), store.load_cb_detail(),
-                             product, start, end, complete_through=cutoff)
+                             product, start, end, complete_through=cutoff, top_n=top_n)
 
 
 # ---------------- ML body ----------------
