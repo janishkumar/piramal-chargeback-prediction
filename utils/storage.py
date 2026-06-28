@@ -47,17 +47,20 @@ class LocalStorage:
         con.close()
 
     # ---- facts ----
+    # Pickle (not parquet) so heterogeneous real-world Excel columns — e.g. a
+    # "Total:" footer row that mixes str into a numeric column — round-trip
+    # without serialization errors.
     def _fact_path(self, name):
-        return self.root / "facts" / f"{name}.parquet"
+        return self.root / "facts" / f"{name}.pkl"
 
     def _append(self, name, df, keys):
         path = self._fact_path(name)
         if path.exists():
-            df = pd.concat([pd.read_parquet(path), df], ignore_index=True)
+            df = pd.concat([pd.read_pickle(path), df], ignore_index=True)
         present = [k for k in keys if k in df.columns]
         if present:
             df = df.drop_duplicates(subset=present)
-        df.to_parquet(path, index=False)
+        df.to_pickle(path)
         return df
 
     def append_cb_detail(self, df):
@@ -68,7 +71,7 @@ class LocalStorage:
 
     def _load(self, name):
         path = self._fact_path(name)
-        return pd.read_parquet(path) if path.exists() else pd.DataFrame()
+        return pd.read_pickle(path) if path.exists() else pd.DataFrame()
 
     def load_cb_detail(self):
         return self._load("cb_detail")
@@ -77,7 +80,7 @@ class LocalStorage:
         return self._load("gross")
 
     def save_v7(self, df):
-        df.to_parquet(self._fact_path("v7"), index=False)
+        df.to_pickle(self._fact_path("v7"))
 
     def load_v7(self):
         return self._load("v7")

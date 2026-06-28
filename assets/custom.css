@@ -1,0 +1,157 @@
+:root {
+  --bg-primary: #0f1117;
+  --bg-secondary: #1a1d29;
+  --bg-tertiary: #252836;
+  --text-primary: #e6e6e6;
+  --text-secondary: #8b8fa3;
+  --accent-blue: #4f8ff7;
+  --accent-green: #2ecc71;
+  --accent-yellow: #f1c40f;
+  --accent-red: #e74c3c;
+  --accent-purple: #9b59b6;
+  --border: #2d3148;
+  --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ---- Header ---- */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 28px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.app-header .brand {
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--accent-blue);
+  letter-spacing: 0.5px;
+}
+.app-header .title {
+  font-size: 18px;
+  color: var(--text-primary);
+}
+.app-header .spacer { flex: 1; }
+
+/* ---- Tabs ---- */
+.dash-tabs, .tab-container { background: var(--bg-primary); }
+.custom-tab {
+  background: var(--bg-primary) !important;
+  color: var(--text-secondary) !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  padding: 12px 24px !important;
+  font-weight: 600;
+}
+.custom-tab--selected {
+  color: var(--accent-blue) !important;
+  border-bottom: 2px solid var(--accent-blue) !important;
+  background: var(--bg-primary) !important;
+}
+
+/* ---- Cards ---- */
+.card-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--card-shadow);
+  margin: 16px 0;
+}
+.card-panel h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.section-note { color: var(--text-secondary); font-size: 12px; margin-bottom: 12px; }
+
+/* ---- KPI cards ---- */
+.kpi-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+.kpi-card {
+  background: var(--bg-secondary);
+  border-left: 4px solid var(--accent-blue);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 200px;
+  flex: 1;
+  box-shadow: var(--card-shadow);
+}
+.kpi-card.green { border-left-color: var(--accent-green); }
+.kpi-card.yellow { border-left-color: var(--accent-yellow); }
+.kpi-card.red { border-left-color: var(--accent-red); }
+.kpi-card.purple { border-left-color: var(--accent-purple); }
+.kpi-value { font-size: 32px; font-weight: 700; color: var(--text-primary); }
+.kpi-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-delta { font-size: 14px; margin-top: 4px; }
+.kpi-delta.green { color: var(--accent-green); }
+.kpi-delta.red { color: var(--accent-red); }
+
+/* ---- Content wrapper ---- */
+.content { padding: 8px 28px 48px 28px; max-width: 1600px; margin: 0 auto; }
+.filter-bar { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+.filter-bar label { font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px; }
+
+/* ---- Status pills ---- */
+.status-good { color: var(--accent-green); }
+.status-ok { color: var(--accent-yellow); }
+.status-bad { color: var(--accent-red); }
+
+/* ---- Empty state ---- */
+.empty-state {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 64px 24px;
+  font-size: 16px;
+}
+
+/* ---- Upload ---- */
+.upload-area {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  cursor: pointer;
+}
+.file-badge {
+  display: inline-block;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  margin: 4px;
+  font-size: 12px;
+}
+.btn-process {
+  background: var(--accent-blue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+/* ---- DataTable dark overrides ---- */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner table {
+  font-family: var(--font-main);
+}
