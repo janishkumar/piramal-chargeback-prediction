@@ -71,11 +71,15 @@ def process_v7_results(v7_df, cb_detail_df=None):
             months=("month", "nunique"),
             total_actual=("actual", "sum"),
             total_v7=("pred_v7_final", "sum"),
+            total_ewm=("pred_ewm", "sum"),
         )
         .reset_index()
     )
     pg["avg_monthly"] = pg["total_actual"] / pg["months"].replace(0, np.nan)
     pg["error_pct"] = pg.apply(lambda r: _err(r["total_v7"], r["total_actual"]), axis=1)
+    pg["ewm_error_pct"] = pg.apply(lambda r: _err(r["total_ewm"], r["total_actual"]), axis=1)
+    # V7 wins a pair when its absolute error is strictly smaller than EWM's.
+    pg["v7_wins"] = pg["error_pct"].abs() < pg["ewm_error_pct"].abs()
     pg["status"] = pg["error_pct"].apply(_status)
     pg["wholesaler"] = pg["Agreement_norm"].map(wh_map).fillna("Others")
     pg["tier"] = pg["avg_monthly"].fillna(0).apply(_tier_of)
@@ -92,7 +96,19 @@ def process_v7_results(v7_df, cb_detail_df=None):
     )
     ps["v7_error_pct"] = (ps["total_v7"] - ps["total_actual"]) / ps["total_actual"].replace(0, np.nan)
     ps["ewm_error_pct"] = (ps["total_ewm"] - ps["total_actual"]) / ps["total_actual"].replace(0, np.nan)
-    ps["v7_better"] = ps["v7_error_pct"].abs() < ps["ewm_error_pct"].abs()
+
+    # CB-dollar-weighted share of each product's pairs where V7 beats EWM.
+    # This reflects V7's pair-level edge; aggregate totals let errors cancel.
+    win = pg.assign(_w=pg["v7_wins"] * pg["total_actual"].abs())
+    win = (
+        win.groupby("product_group")
+        .agg(_win_cb=("_w", "sum"), _tot_cb=("total_actual", lambda s: s.abs().sum()))
+        .reset_index()
+    )
+    win["v7_win_pct"] = win["_win_cb"] / win["_tot_cb"].replace(0, np.nan)
+    ps = ps.merge(win[["product_group", "v7_win_pct"]], on="product_group", how="left")
+    # "V7 Better?" now means V7 wins the majority of the product's CB dollars.
+    ps["v7_better"] = ps["v7_win_pct"] >= 0.5
 
     # ---- monthly portfolio ----
     mp = (

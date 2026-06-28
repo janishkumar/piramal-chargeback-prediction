@@ -130,6 +130,7 @@ def ml_body(v7, cb, view, product, start, end):
             "V7 Error %": ps["v7_error_pct"].map(fmt_pct),
             "Total EWM ($)": ps["total_ewm"].map(fmt_dollar),
             "EWM Error %": ps["ewm_error_pct"].map(fmt_pct),
+            "V7 Win % (pairs)": ps["v7_win_pct"].map(fmt_pct),
             "V7 Better?": ps["v7_better"].map(lambda b: "Yes" if b else "No"),
         })
         sections.append(_card("Monthly Performance by Product",
