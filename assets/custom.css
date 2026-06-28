@@ -108,6 +108,35 @@ body {
 .filter-bar { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
 .filter-bar label { font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px; }
 
+/* ---- Dropdowns: default white box bled through, washing out the light
+   selected-value text. Force the dark theme onto box, value, and menu. ---- */
+.dash-dropdown,
+.dash-dropdown.dark-dd,
+.dash-dropdown.filter-dropdown {
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  color: var(--text-primary) !important;
+}
+.dash-dropdown-trigger,
+.dash-dropdown-value,
+.dash-dropdown-value-item {
+  color: var(--text-primary) !important;
+  font-weight: 500;
+}
+.dash-dropdown-options,
+.dash-options-list,
+.dash-dropdown-menu {
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border) !important;
+}
+.dash-dropdown-option { color: var(--text-primary) !important; background: transparent !important; }
+.dash-dropdown-option:hover,
+.dash-dropdown-option[aria-selected="true"] {
+  background: var(--bg-secondary) !important;
+  color: var(--accent-blue) !important;
+}
+
 /* ---- Status pills ---- */
 .status-good { color: var(--accent-green); }
 .status-ok { color: var(--accent-yellow); }
