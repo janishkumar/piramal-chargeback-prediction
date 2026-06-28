@@ -43,7 +43,15 @@ def excel_products(gross, cb):
     return sorted(prods)
 
 
-def excel_body(gross, cb, product, start, end):
+def default_cutoff(months, lag=2):
+    """Latest fully-mature CB month: chargebacks keep arriving for ~`lag` months,
+    so months within `lag` of the most recent data are still 'partial'."""
+    if not months:
+        return None
+    return str(pd.Period(max(months), freq="M") - lag)
+
+
+def excel_body(gross, cb, product, start, end, complete_through=None):
     if gross.empty or cb.empty:
         return empty_state("Upload Gross Sales + CB Detail files to see results.")
     res = compute_accrual(gross, cb, product)
@@ -53,22 +61,38 @@ def excel_body(gross, cb, product, start, end):
     if res.empty:
         return empty_state("No months in the selected range.")
 
-    total_accrual = res["accrual_pred"].sum(skipna=True)
-    total_actual = res["actual_cb_amt"].sum(skipna=True)
+    all_months = sorted(res["year_month"].tolist())
+    cutoff = complete_through or default_cutoff(all_months)
+    res["mature"] = res["year_month"] <= cutoff if cutoff else True
+    mature = res[res["mature"]]
+    n_partial = int((~res["mature"]).sum())
+
+    # KPIs over MATURE *and* predictable months only: partial months have
+    # incomplete actuals, and pre-prediction months (no accrual) would unbalance
+    # the gap by adding actuals with no matching prediction.
+    scored = mature[mature["accrual_pred"].notna()]
+    total_accrual = scored["accrual_pred"].sum(skipna=True)
+    total_actual = scored["actual_cb_amt"].sum(skipna=True)
     gap = total_accrual - total_actual
     gap_pct = gap / total_accrual if total_accrual else np.nan
+    months_label = f"{len(scored)} mature" + (f" (+{n_partial} partial)" if n_partial else "")
 
     kpis = kpi_row([
         {"label": "Total Accrual (Predicted)", "value": fmt_dollar(total_accrual)},
         {"label": "Total Actual CB $", "value": fmt_dollar(total_actual), "color": "green"},
         {"label": "YTD Gap", "value": fmt_dollar(gap)},
         {"label": "YTD Gap %", "value": fmt_pct(gap_pct), "color": kpi_color(gap_pct)},
-        {"label": "Active Months", "value": str(len(res))},
+        {"label": "Active Months", "value": months_label},
     ])
 
-    # Accrual table -- golden column names/order
+    # Accrual table -- golden column names/order. Partial months: blank the gap
+    # columns (misleading without complete actuals) and flag maturity.
+    def _gap_cell(row, col, fmt):
+        return fmt(row[col]) if row["mature"] else "— partial"
+
     disp = pd.DataFrame({
         "Month": res["year_month"],
+        "Maturity": res["mature"].map(lambda m: "✓" if m else "⚠ partial"),
         "Primary Sales Qty": res["sales_qty"].map(lambda v: f"{v:,.0f}"),
         "Est CB Qty %": res["est_cb_pct"].map(fmt_pct),
         "Est CB Qty": res["est_cb_qty"].map(lambda v: f"{v:,.0f}" if pd.notna(v) else "-"),
@@ -77,20 +101,29 @@ def excel_body(gross, cb, product, start, end):
         "Actual CB Qty": res["actual_cb_qty"].map(lambda v: f"{v:,.0f}"),
         "Actual CB Qty%": res["actual_cb_pct"].map(fmt_pct),
         "Actual CB / Unit": res["actual_cb_per_unit"].map(fmt_dollar),
-        "Actual CB $": res["actual_cb_amt"].map(fmt_dollar),
-        "YTD GAP": res["ytd_gap"].map(fmt_dollar),
-        "YTD Gap %": res["ytd_gap_pct"].map(fmt_pct),
+        "Actual CB $": [_gap_cell(r, "actual_cb_amt", fmt_dollar) for _, r in res.iterrows()],
+        "YTD GAP": [_gap_cell(r, "ytd_gap", fmt_dollar) for _, r in res.iterrows()],
+        "YTD Gap %": [_gap_cell(r, "ytd_gap_pct", fmt_pct) for _, r in res.iterrows()],
     })
+    grey_partial = [{
+        "if": {"filter_query": '{Maturity} = "⚠ partial"'},
+        "color": "#8b8fa3", "fontStyle": "italic",
+    }]
+
+    note = (f"Accrual Model (uses current-month data). YTD Gap is cumulative. "
+            f"Chargebacks mature over ~2 months, so months after {cutoff} are "
+            f"marked partial and excluded from the KPIs above.")
 
     chart = dcc.Graph(figure=accuracy_bar_line(
-        res.assign(err=res["ytd_gap_pct"]),
+        mature.assign(err=mature["ytd_gap_pct"]),
         "accrual_pred", "actual_cb_amt", "err"))
 
     return html.Div([
         kpis,
-        _card("Accrual Calculation", data_table(disp, "excel-accrual"),
-              note="Accrual Model (uses current month data). YTD Gap is cumulative."),
-        _card("Monthly Accuracy", chart),
+        _card("Accrual Calculation",
+              data_table(disp, "excel-accrual", extra_conditional=grey_partial),
+              note=note),
+        _card("Monthly Accuracy (mature months)", chart),
     ])
 
 

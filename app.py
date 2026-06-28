@@ -99,10 +99,19 @@ def render_tab(tab, _refresh):
         default = "SEVOFLURANE" if "SEVOFLURANE" in prods else (prods[0] if prods else None)
         months = sorted(set(
             (compute_months(gross, "Shipped Date") | compute_months(cb, "Process Date"))))
+        cutoff_default = render.default_cutoff(months)
         return html.Div([
             html.Div(className="filter-bar", children=[
                 product_dropdown("excel-product", prods, default),
                 month_range("excel-start", "excel-end", months),
+                html.Div(className="filter-group", children=[
+                    html.Label("Data Complete Through", className="filter-label"),
+                    dcc.Dropdown(
+                        id="excel-cutoff",
+                        options=[{"label": m, "value": m} for m in months],
+                        value=cutoff_default, clearable=False,
+                        className="filter-dropdown"),
+                ]),
             ]),
             html.Div(id="excel-body"),
         ])
@@ -134,11 +143,13 @@ def compute_months(df, col):
     Input("excel-product", "value"),
     Input("excel-start", "value"),
     Input("excel-end", "value"),
+    Input("excel-cutoff", "value"),
 )
-def update_excel(product, start, end):
+def update_excel(product, start, end, cutoff):
     if not product:
         return render.empty_state("Upload Gross Sales + CB Detail files to see results.")
-    return render.excel_body(store.load_gross(), store.load_cb_detail(), product, start, end)
+    return render.excel_body(store.load_gross(), store.load_cb_detail(),
+                             product, start, end, complete_through=cutoff)
 
 
 # ---------------- ML body ----------------

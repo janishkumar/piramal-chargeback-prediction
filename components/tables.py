@@ -30,10 +30,13 @@ STATUS_CONDITIONAL = [
 ]
 
 
-def data_table(df, table_id, page_size=None, searchable=False, status_colors=False):
+def data_table(df, table_id, page_size=None, searchable=False, status_colors=False,
+               extra_conditional=None):
     fmt = []
     if status_colors:
-        fmt = STATUS_CONDITIONAL
+        fmt = list(STATUS_CONDITIONAL)
+    if extra_conditional:
+        fmt = fmt + list(extra_conditional)
     kwargs = dict(
         id=table_id,
         columns=[{"name": str(c), "id": str(c)} for c in df.columns],

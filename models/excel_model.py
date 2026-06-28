@@ -87,8 +87,13 @@ def compute_accrual(gross_df, cb_df, product_group, adj_factor=None):
     out = pd.DataFrame(rows)
     if out.empty:
         return out
-    cum_acc = out["accrual_pred"].fillna(0).cumsum()
-    cum_act = out["actual_cb_amt"].fillna(0).cumsum()
-    out["ytd_gap"] = cum_acc - cum_act
-    out["ytd_gap_pct"] = out["ytd_gap"] / cum_acc.replace(0, np.nan)
+    # YTD gap accumulates only over predictable months (those with an accrual).
+    # Pre-prediction months (the first two, no Est CB%) have actuals but no
+    # accrual; including them would corrupt the gap, as the Excel model omits
+    # them entirely and starts cumulating at the first predictable month.
+    pred = out["accrual_pred"].notna()
+    cum_acc = out["accrual_pred"].where(pred, 0).cumsum()
+    cum_act = out["actual_cb_amt"].where(pred, 0).cumsum()
+    out["ytd_gap"] = (cum_acc - cum_act).where(pred)
+    out["ytd_gap_pct"] = (out["ytd_gap"] / cum_acc.replace(0, np.nan)).where(pred)
     return out
