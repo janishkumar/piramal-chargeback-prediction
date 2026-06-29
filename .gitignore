@@ -4,3 +4,8 @@ __pycache__/
 .env
 *.xlsx
 *.csv
+
+# Editor / local tooling
+.claude/
+.vscode/
+.idea/
