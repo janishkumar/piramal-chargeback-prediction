@@ -42,10 +42,12 @@ def test_compute_accrual_parity_overlap(gross_xlsx, cb_xlsx, golden_xlsx):
             assert abs(r["accrual_pred"] - r["Accrual"]) / max(r["Accrual"], 1) < 0.05
 
 
-def test_wholesaler_breakdown_shape_and_shares(cb_xlsx):
-    vol, cpu = wholesaler_breakdown(pd.read_excel(cb_xlsx), "SEVOFLURANE")
+def test_wholesaler_breakdown_shape_and_shares(cb_xlsx, gross_xlsx):
+    vol, cpu = wholesaler_breakdown(
+        pd.read_excel(gross_xlsx), pd.read_excel(cb_xlsx), "SEVOFLURANE"
+    )
     if vol.empty:
-        pytest.skip("no SEVOFLURANE CB rows in sample")
+        pytest.skip("no SEVOFLURANE rows in sample")
     # both tables have a Month col + the five wholesaler groups
     for grp in WHOLESALER_GROUPS:
         assert grp in vol.columns and grp in cpu.columns

@@ -1,7 +1,9 @@
 """Pluggable storage. Local backend (SQLite metadata + parquet facts) for dev.
 
-Raw transaction facts append with dedup on natural keys so overlapping monthly
-uploads don't double-count. v7_results is a full backtest, so it replaces.
+Raw transaction facts append with **full-row** dedup so re-uploading the same
+file doesn't double-count, while legitimately distinct rows (e.g. the same
+invoice line split across lots / ship-tos) are preserved. v7_results is a full
+backtest, so it replaces.
 
 A future `azure` backend (Blob + Postgres) implements the same interface;
 select via STORAGE_BACKEND env var in app wiring.
@@ -12,8 +14,9 @@ import uuid
 
 import pandas as pd
 
-CB_KEYS = ["Chargeback Number", "Line Number"]
-GROSS_KEYS = ["Invoice Number", "Line Number", "Order Number"]
+# Dedup is on the FULL row, not a coarse key. A coarse natural key (e.g.
+# Invoice+Line+Order for gross) wrongly collapses distinct rows that share it
+# but differ by lot / ship-to / quantity, silently dropping real volume.
 
 
 class LocalStorage:
@@ -53,21 +56,19 @@ class LocalStorage:
     def _fact_path(self, name):
         return self.root / "facts" / f"{name}.pkl"
 
-    def _append(self, name, df, keys):
+    def _append(self, name, df):
         path = self._fact_path(name)
         if path.exists():
             df = pd.concat([pd.read_pickle(path), df], ignore_index=True)
-        present = [k for k in keys if k in df.columns]
-        if present:
-            df = df.drop_duplicates(subset=present)
+        df = df.drop_duplicates().reset_index(drop=True)
         df.to_pickle(path)
         return df
 
     def append_cb_detail(self, df):
-        return self._append("cb_detail", df, CB_KEYS)
+        return self._append("cb_detail", df)
 
     def append_gross(self, df):
-        return self._append("gross", df, GROSS_KEYS)
+        return self._append("gross", df)
 
     def _load(self, name):
         path = self._fact_path(name)

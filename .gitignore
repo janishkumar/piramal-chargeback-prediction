@@ -9,3 +9,6 @@ __pycache__/
 .claude/
 .vscode/
 .idea/
+
+# Client customer roster (derived from client data) — keep out of public repo
+utils/cust_grp_map.json

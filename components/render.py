@@ -144,7 +144,7 @@ def excel_body(gross, cb, product, start, end, complete_through=None, top_n=None
     }])], ignore_index=True)
 
     # ---- Section 2 (PRD 7.5): Wholesaler breakdown (two tables) ----
-    vol, cpu = wholesaler_breakdown(cb, product, top_n=top_n)
+    vol, cpu = wholesaler_breakdown(gross, cb, product, top_n=top_n)
     vol_cols = WHOLESALER_GROUPS + ["Total"]
     cpu_cols = WHOLESALER_GROUPS + ["Grand Total"]
     if not vol.empty:

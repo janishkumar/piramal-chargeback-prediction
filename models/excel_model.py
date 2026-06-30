@@ -12,7 +12,12 @@ excel_model_output.xlsx exactly.
 import numpy as np
 import pandas as pd
 
-from utils.mappings import WHOLESALER_GROUPS, classify_wholesaler, ndc_to_product
+from utils.mappings import (
+    WHOLESALER_GROUPS,
+    classify_wholesaler,
+    ndc_to_product,
+    resolve_gross_groups,
+)
 
 
 def _filter_product(df, date_col, product_group):
@@ -36,32 +41,43 @@ def _prep_cb(cb_df, product_group, top_n=None):
     return c
 
 
-def wholesaler_breakdown(cb_df, product_group, top_n=None):
+def wholesaler_breakdown(gross_df, cb_df, product_group, top_n=None):
     """Return (volume_share_df, cb_per_unit_df) per month per wholesaler group.
 
-    volume_share: each group's share of monthly CB qty (fractions, + Total=1.0).
-    cb_per_unit: each group's CB amount / CB qty in $ (+ Grand Total = weighted).
+    Matches the Excel model:
+    - volume_share: each group's share of monthly **shipped (sales) qty**, with
+      the group resolved from the customer master (Cust Grp), + Total = 1.0.
+    - cb_per_unit: each group's CB amount / CB qty in $ (+ Grand Total weighted).
     """
+    g = _filter_product(gross_df, "Shipped Date", product_group)
     c = _prep_cb(cb_df, product_group, top_n)
-    if c.empty:
+    if g.empty and c.empty:
         return pd.DataFrame(), pd.DataFrame()
-    grp = (
+
+    g = g.copy()
+    g["wh"] = resolve_gross_groups(g)
+    sales_grp = g.groupby(["year_month", "wh"])["Shipped Quantity"].sum().reset_index()
+    cb_grp = (
         c.groupby(["year_month", "wh"])
-        .agg(q=("Chargeback Quantity", "sum"), a=("Chargeback Amount", "sum"))
+        .agg(a=("Chargeback Amount", "sum"), q=("Chargeback Quantity", "sum"))
         .reset_index()
     )
+    months = sorted(set(g["year_month"]) | set(c["year_month"]))
     vol_rows, cpu_rows = [], []
-    for m in sorted(c["year_month"].unique()):
-        sub = grp[grp["year_month"] == m]
-        qmap = dict(zip(sub["wh"], sub["q"]))
-        amap = dict(zip(sub["wh"], sub["a"]))
-        tot_q, tot_a = sum(qmap.values()), sum(amap.values())
+    for m in months:
+        smap = dict(zip(sales_grp.loc[sales_grp["year_month"] == m, "wh"],
+                        sales_grp.loc[sales_grp["year_month"] == m, "Shipped Quantity"]))
+        sub_cb = cb_grp[cb_grp["year_month"] == m]
+        amap = dict(zip(sub_cb["wh"], sub_cb["a"]))
+        qmap = dict(zip(sub_cb["wh"], sub_cb["q"]))
+        tot_sales = sum(smap.values())
+        tot_a, tot_q = sum(amap.values()), sum(qmap.values())
         vrow, crow = {"Month": m}, {"Month": m}
-        for g in WHOLESALER_GROUPS:
-            q, a = float(qmap.get(g, 0.0)), float(amap.get(g, 0.0))
-            vrow[g] = (q / tot_q) if tot_q else np.nan
-            crow[g] = (a / q) if q else np.nan
-        vrow["Total"] = 1.0 if tot_q else np.nan
+        for grp_name in WHOLESALER_GROUPS:
+            vrow[grp_name] = (float(smap.get(grp_name, 0.0)) / tot_sales) if tot_sales else np.nan
+            q = float(qmap.get(grp_name, 0.0))
+            crow[grp_name] = (float(amap.get(grp_name, 0.0)) / q) if q else np.nan
+        vrow["Total"] = 1.0 if tot_sales else np.nan
         crow["Grand Total"] = (tot_a / tot_q) if tot_q else np.nan
         vol_rows.append(vrow)
         cpu_rows.append(crow)

@@ -5,7 +5,11 @@ floats like 66794024942.0, and the occasional non-numeric item code such as
 'PIR030'). Everything that is not a known numeric NDC is bucketed as
 "UNMAPPED" rather than silently dropped.
 """
+import json
+import pathlib as _pathlib
 import re
+
+import pandas as pd
 
 NDC_TO_PROD = {
     "66794015701": "GABLOFEN", "66794015702": "GABLOFEN", "66794015101": "GABLOFEN",
@@ -68,3 +72,40 @@ def classify_wholesaler(name):
     if "ABC" in n or "AMERISOURCE" in n or "CENCORA" in n:
         return "ABC"
     return "Others"
+
+
+# Authoritative Customer Number -> Cust Grp mapping, extracted from the finance
+# team's Excel "Gross sales" tab (1,189 customers). The raw V1.9 Gross Sales
+# export leaves Cust Grp ~85% blank, so we resolve it from this master instead
+# of guessing from the customer name.
+def _load_cust_grp_map():
+    p = _pathlib.Path(__file__).with_name("cust_grp_map.json")
+    try:
+        return json.load(open(p))
+    except FileNotFoundError:
+        # Client customer roster is kept out of the public repo; without it we
+        # fall back to name-keyword classification (less exact but functional).
+        return {}
+
+
+_CUST_GRP_MAP = _load_cust_grp_map()
+
+
+def resolve_gross_groups(gross_df):
+    """Return a wholesaler-group Series for gross-sales rows, matching the Excel.
+
+    Priority: a valid existing ``Cust Grp`` value -> the customer-master lookup
+    by ``Customer Number`` -> a name-keyword fallback -> 'Others'.
+    """
+    n = len(gross_df)
+    valid = set(WHOLESALER_GROUPS)
+    grp = pd.Series([None] * n, index=gross_df.index, dtype=object)
+    if "Cust Grp" in gross_df.columns:
+        existing = gross_df["Cust Grp"].where(gross_df["Cust Grp"].isin(valid))
+        grp = grp.fillna(existing)
+    if "Customer Number" in gross_df.columns:
+        by_num = gross_df["Customer Number"].astype(str).map(_CUST_GRP_MAP)
+        grp = grp.fillna(by_num)
+    if "Customer Name" in gross_df.columns:
+        grp = grp.fillna(gross_df["Customer Name"].map(classify_wholesaler))
+    return grp.fillna("Others")
