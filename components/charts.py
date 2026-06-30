@@ -7,10 +7,10 @@ RED = "#e74c3c"
 PURPLE = "#9b59b6"
 
 LAYOUT = dict(
-    template="plotly_dark",
-    paper_bgcolor="#1a1d29",
-    plot_bgcolor="#1a1d29",
-    font=dict(family="Inter, sans-serif", color="#e6e6e6"),
+    template="plotly_white",
+    paper_bgcolor="#ffffff",
+    plot_bgcolor="#ffffff",
+    font=dict(family="Inter, sans-serif", color="#1b1f2a"),
     margin=dict(l=50, r=50, t=40, b=40),
     legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
 )

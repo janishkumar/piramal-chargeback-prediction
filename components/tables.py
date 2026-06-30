@@ -2,21 +2,21 @@ from dash import dash_table
 
 DARK_STYLE = dict(
     style_header={
-        "backgroundColor": "#252836",
-        "color": "#e6e6e6",
+        "backgroundColor": "#eef1f7",
+        "color": "#1b1f2a",
         "fontWeight": "700",
-        "border": "1px solid #2d3148",
+        "border": "1px solid #dde2ec",
     },
     style_cell={
-        "backgroundColor": "#1a1d29",
-        "color": "#e6e6e6",
-        "border": "1px solid #2d3148",
+        "backgroundColor": "#ffffff",
+        "color": "#1b1f2a",
+        "border": "1px solid #dde2ec",
         "fontFamily": "Inter, sans-serif",
         "fontSize": "13px",
         "padding": "8px 12px",
         "textAlign": "right",
     },
-    style_data={"backgroundColor": "#1a1d29"},
+    style_data={"backgroundColor": "#ffffff"},
 )
 
 # Color status cells GOOD/OK/BAD

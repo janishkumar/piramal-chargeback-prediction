@@ -1,16 +1,16 @@
 :root {
-  --bg-primary: #0f1117;
-  --bg-secondary: #1a1d29;
-  --bg-tertiary: #252836;
-  --text-primary: #e6e6e6;
-  --text-secondary: #8b8fa3;
-  --accent-blue: #4f8ff7;
-  --accent-green: #2ecc71;
-  --accent-yellow: #f1c40f;
-  --accent-red: #e74c3c;
-  --accent-purple: #9b59b6;
-  --border: #2d3148;
-  --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  --bg-primary: #f4f6fb;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #eef1f7;
+  --text-primary: #1b1f2a;
+  --text-secondary: #5b6175;
+  --accent-blue: #2f6fe0;
+  --accent-green: #1e9e5a;
+  --accent-yellow: #c79a08;
+  --accent-red: #d1402f;
+  --accent-purple: #8e44ad;
+  --border: #dde2ec;
+  --card-shadow: 0 2px 12px rgba(20, 30, 60, 0.08);
   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }

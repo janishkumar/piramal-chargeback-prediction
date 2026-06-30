@@ -52,6 +52,14 @@ def default_cutoff(months, lag=2):
     return str(pd.Period(max(months), freq="M") - lag)
 
 
+def _total_style(col, *labels):
+    """Bold + shaded styling for a totals row identified by `col` == label."""
+    return [{
+        "if": {"filter_query": f'{{{col}}} = "{lab}"'},
+        "fontWeight": "700", "backgroundColor": "#eef1f7",
+    } for lab in labels]
+
+
 def _two_col(*cards):
     return html.Div(className="two-col",
                     style={"display": "flex", "gap": "16px", "flexWrap": "wrap"},
@@ -113,6 +121,26 @@ def excel_body(gross, cb, product, start, end, complete_through=None, top_n=None
         "YTD GAP": [_gap_cell(r, "ytd_gap", fmt_dollar) for _, r in res.iterrows()],
         "YTD Gap %": [_gap_cell(r, "ytd_gap_pct", fmt_pct) for _, r in res.iterrows()],
     })
+    # Grand Total over mature + predictable months: sum the $/qty, derive rates.
+    sc = scored
+    s_sales, s_estq = sc["sales_qty"].sum(), sc["est_cb_qty"].sum()
+    s_accr, s_actq = sc["accrual_pred"].sum(), sc["actual_cb_qty"].sum()
+    s_acta = sc["actual_cb_amt"].sum()
+    s_gap = s_accr - s_acta
+    disp = pd.concat([disp, pd.DataFrame([{
+        "Month": "Grand Total", "Maturity": "",
+        "Primary Sales Qty": f"{s_sales:,.0f}",
+        "Est CB Qty %": fmt_pct(s_estq / s_sales if s_sales else np.nan),
+        "Est CB Qty": f"{s_estq:,.0f}",
+        "Avg CB Per Unit": fmt_dollar(s_accr / s_estq if s_estq else np.nan),
+        "Accrual": fmt_dollar(s_accr),
+        "Actual CB Qty": f"{s_actq:,.0f}",
+        "Actual CB Qty%": fmt_pct(s_actq / s_sales if s_sales else np.nan),
+        "Actual CB / Unit": fmt_dollar(s_acta / s_actq if s_actq else np.nan),
+        "Actual CB $": fmt_dollar(s_acta),
+        "YTD GAP": fmt_dollar(s_gap),
+        "YTD Gap %": fmt_pct(s_gap / s_accr if s_accr else np.nan),
+    }])], ignore_index=True)
     grey_partial = [{
         "if": {"filter_query": '{Maturity} = "⚠ partial"'},
         "color": "#8b8fa3", "fontStyle": "italic",
@@ -148,23 +176,28 @@ def excel_body(gross, cb, product, start, end, complete_through=None, top_n=None
     vol_cols = WHOLESALER_GROUPS + ["Total"]
     cpu_cols = WHOLESALER_GROUPS + ["Grand Total"]
     if not vol.empty:
+        # Average row across months (these are rates, so we average, not sum).
+        vol = pd.concat([vol, pd.DataFrame([{"Month": "Average",
+            **{c: vol[c].mean() for c in vol_cols}}])], ignore_index=True)
+        cpu = pd.concat([cpu, pd.DataFrame([{"Month": "Average",
+            **{c: cpu[c].mean() for c in cpu_cols}}])], ignore_index=True)
         for c in vol_cols:
             vol[c] = vol[c].map(fmt_pct)
         for c in cpu_cols:
             cpu[c] = cpu[c].map(fmt_dollar)
         wh_section = _two_col(
-            _card("Volume Share by Wholesaler", data_table(vol, "excel-volshare")),
-            _card("CB Per Unit by Wholesaler", data_table(cpu, "excel-cpu")),
+            _card("Volume Share by Wholesaler", data_table(vol, "excel-volshare", extra_conditional=_total_style("Month","Average"))),
+            _card("CB Per Unit by Wholesaler", data_table(cpu, "excel-cpu", extra_conditional=_total_style("Month","Average"))),
         )
     else:
         wh_section = html.Div()
 
     return html.Div([
         kpis,
-        _card("Primary Sales vs Chargeback Summary", data_table(summary, "excel-summary")),
+        _card("Primary Sales vs Chargeback Summary", data_table(summary, "excel-summary", extra_conditional=_total_style("Month","Grand Total"))),
         wh_section,
         _card("Accrual Calculation",
-              data_table(disp, "excel-accrual", extra_conditional=grey_partial),
+              data_table(disp, "excel-accrual", extra_conditional=grey_partial + _total_style("Month","Grand Total")),
               note=note),
         _card("Monthly Accuracy (mature months)", chart),
     ])
@@ -209,8 +242,20 @@ def ml_body(v7, cb, view, product, start, end):
             "V7 Win % (pairs)": ps["v7_win_pct"].map(fmt_pct),
             "V7 Better?": ps["v7_better"].map(lambda b: "Yes" if b else "No"),
         })
+        ta, tv, te = ps["total_actual"].sum(), ps["total_v7"].sum(), ps["total_ewm"].sum()
+        win = ((ps["v7_win_pct"] * ps["total_actual"]).sum() / ta) if ta else np.nan
+        disp = pd.concat([disp, pd.DataFrame([{
+            "Product Group": "Grand Total",
+            "Total Actual ($)": fmt_dollar(ta),
+            "Total V7 ($)": fmt_dollar(tv),
+            "V7 Error %": fmt_pct((tv - ta) / ta if ta else np.nan),
+            "Total EWM ($)": fmt_dollar(te),
+            "EWM Error %": fmt_pct((te - ta) / ta if ta else np.nan),
+            "V7 Win % (pairs)": fmt_pct(win),
+            "V7 Better?": "Yes" if (win or 0) >= 0.5 else "No",
+        }])], ignore_index=True)
         sections.append(_card("Monthly Performance by Product",
-                              data_table(disp, "ml-product")))
+                              data_table(disp, "ml-product", extra_conditional=_total_style("Product Group","Grand Total"))))
         sections.append(_card("Error Distribution",
                               dcc.Graph(figure=error_histogram(pairs["error_pct"]))))
     else:
@@ -246,6 +291,19 @@ def ml_body(v7, cb, view, product, start, end):
         ">30% Err": tb["over30"].map(fmt_pct),
         "Avg V7 Err": tb["avg_v7_err"].map(fmt_pct),
     })
-    sections.append(_card("Business Tier Breakdown", data_table(tier_disp, "ml-tier")))
+    npairs = tb["pairs"].sum()
+    wmean = lambda col: (tb[col] * tb["pairs"]).sum() / npairs if npairs else np.nan
+    tier_disp = pd.concat([tier_disp, pd.DataFrame([{
+        "Tier": "Total",
+        "Pairs": int(npairs),
+        "Total CB ($)": fmt_dollar(tb["total_cb"].sum()),
+        "% of CB": fmt_pct(tb["pct_of_cb"].sum()),
+        "<10% Err": fmt_pct(wmean("within10")),
+        "<15% Err": fmt_pct(wmean("within15")),
+        "<20% Err": fmt_pct(wmean("within20")),
+        ">30% Err": fmt_pct(wmean("over30")),
+        "Avg V7 Err": fmt_pct(wmean("avg_v7_err")),
+    }])], ignore_index=True)
+    sections.append(_card("Business Tier Breakdown", data_table(tier_disp, "ml-tier", extra_conditional=_total_style("Tier","Total"))))
 
     return html.Div(sections)
