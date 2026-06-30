@@ -45,6 +45,9 @@ def data_table(df, table_id, page_size=None, searchable=False, status_colors=Fal
         filter_action="native" if searchable else "none",
         style_data_conditional=fmt,
         style_as_list_view=False,
+        # Wide tables scroll horizontally inside their card instead of
+        # overflowing the border.
+        style_table={"overflowX": "auto", "maxWidth": "100%"},
         **DARK_STYLE,
     )
     if page_size:
